@@ -14,6 +14,8 @@
 #define PER_RESOURCE_KILL 5  // 設定多少資源數量可以殺掉一隻喪屍
 #define INIT_SPEED 80        // 設定初始移動速度
 #define MAX_QUEUE_SIZE 1600  // 設定柱列大小
+#define DETECT_ZOMBIE_RANGE 8 //玩家評估殭屍接近範圍
+#define MAX_EVAL_PATH 10      //完架建立評估路徑數量
 
 std::random_device rd;
 std::mt19937 generator(rd());
@@ -40,7 +42,7 @@ struct Entity {
 };
 
 // 定義指向節點結構的指標變數
-typedef struct Entity* EntityPointer;
+typedef struct Entity *EntityPointer;
 
 // 定義座標結構
 struct Location {
@@ -64,46 +66,86 @@ struct ResourceEvaluation {
     int cost;      // 到達資源所需要的總成本
 };
 
-void openWindow();                   // 開啟游戲視窗
-void closeGame(EntityPointer zombie);  // 處理遊戲結束邏輯
+// 開啟游戲視窗
+void openWindow();
+
+// 處理遊戲結束邏輯
+void closeGame(EntityPointer zombie);
+
+// 遊戲進行邏輯
 char playGame(int field[][GRID_SIDE],
               EntityPointer zombie,
-              EntityPointer player);  // 遊戲進行邏輯
+              EntityPointer player);
+
+//(生存者死亡條件：撞牆和撞到喪屍)
 bool IsGameOver(EntityPointer zombie,
                 EntityPointer player,
-                int field[][GRID_SIDE]);  //(生存者死亡條件：撞牆和撞到喪屍)
-int showGameOverMsg();                    // 遊戲結束訊息
-void showInfo();                          // 顯示遊戲相關資訊
-void drawGameField(int field[][GRID_SIDE]);    // 繪製遊戲區域
-void drawSquare(int row, int col, int color);  // 繪製方塊
+                int field[][GRID_SIDE]);
+
+// 遊戲結束訊息
+int showGameOverMsg();
+
+// 顯示遊戲相關資訊
+void showInfo();
+
+// 繪製遊戲區域
+void drawGameField(int field[][GRID_SIDE]);
+
+// 繪製方塊
+void drawSquare(int row, int col, int color);
+
+// 讀取AI輸入，並設定到所有喪屍節點
 void controlZombieDirection(
         int field[][GRID_SIDE],
         EntityPointer zombie,
-        EntityPointer player);  // 讀取AI輸入，並設定到所有喪屍節點
+        EntityPointer player);
+
+// 讀取鍵盤方向輸入，或者AI輸入
 void controlPlayerDirection(
         int field[][GRID_SIDE],
         EntityPointer player,
-        EntityPointer zombie);  // 讀取鍵盤方向輸入，或者AI輸入
+        EntityPointer zombie);
+
+// 繪製喪屍群前進一步的改變
 void moveZombie(int field[][GRID_SIDE],
-                EntityPointer zombie);  // 繪製喪屍群前進一步的改變
-void movePlayer(EntityPointer player);  // 繪製生存者前進一步的改變
-void createResource(int field[][GRID_SIDE], EntityPointer zombie);  // 產生資源
-bool IsAtWall(int field[][GRID_SIDE], int row, int col);  // 判斷是否撞到牆
+                EntityPointer zombie);
+
+// 繪製生存者前進一步的改變
+void movePlayer(EntityPointer player);
+
+// 產生資源
+void createResource(int field[][GRID_SIDE], EntityPointer zombie);
+
+// 判斷是否撞到牆
+bool IsAtWall(int field[][GRID_SIDE], int row, int col);
+
+// 判斷是否撞到喪屍的身體
 bool IsAtZombie(EntityPointer zombie,
                 int row,
-                int col);  // 判斷是否撞到喪屍的身體
-bool IsCloseZombie(EntityPointer zombie, int row, int col);  // 判斷是否撞到喪屍
+                int col);
+
+// 判斷是否撞到喪屍
+bool IsCloseZombie(EntityPointer zombie, int row, int col);
+
+// 處理生存者收集到資源邏輯
 void playerCollectResource(int field[][GRID_SIDE],
                            EntityPointer player,
-                           EntityPointer zombie);  // 處理生存者收集到資源邏輯
+                           EntityPointer zombie);
+
+// 增加喪屍數量
 void addZombie(int field[][GRID_SIDE],
                EntityPointer zombie,
-               EntityPointer player);   // 增加喪屍數量
-void killZombie(EntityPointer zombie);  // 隨機殺掉一隻喪屍
-Location nextStepLoc(EntityPointer node, Direction direct);  // 計算下一步的座標
-/* Location findNearestResource(int field[][GRID_SIDE],
-                             EntityPointer me);  // 尋找最接近資源的座標 */
-Location findNearestKthResource(int field[][GRID_SIDE], EntityPointer me, int k); // 尋找最接近第 K 的資源的座標
+               EntityPointer player);
+
+// 隨機殺掉一隻喪屍
+void killZombie(EntityPointer zombie);
+
+// 計算下一步的座標
+Location nextStepLoc(EntityPointer node, Direction direct);
+
+// 尋找最接近第 K 的資源的座標
+Location findNearestKthResource(int field[][GRID_SIDE], EntityPointer me, int k);
+
 // 生存者如果無法找到有效路徑，暫時決定一個安全方向
 Direction safeDirect(int field[][GRID_SIDE],
                      EntityPointer player,
@@ -123,30 +165,47 @@ PathPointer playerFindPath(int field[][GRID_SIDE],
                            Location goalLoc,
                            EntityPointer zombie);
 
-void addPathQueue(PathNode pathNode);  // 將之後要拜訪的節點放入佇列裡
-PathPointer popPathQueue();  // 傳回路徑佇列中的元素，並將它從佇列中刪除
+// 路徑柱列處理
+void addPathQueue(PathNode pathNode);   // 將之後要拜訪的節點放入佇列裡
+PathPointer popPathQueue();             // 傳回路徑佇列中的元素，並將它從佇列中刪除
 bool isPathQueueEmpty();                // 判斷佇列是否為空
 void resetPathQueue();                  // 重設佇列
 void sortPathQueue();                   // 對佇列中的元素進行排序
 bool IsInPathQueue(PathNode pathNode);  // 判斷該元素是否在佇列之中
-PathPointer buildPath(PathPointer goal);  // 回傳到目標位置的路徑串列
-int calcSteps(Location start, Location goal);  // 計算兩點之間需要移動的步數
-bool visited(Location loc);  // 判斷是否該節點已經拜訪過
-Direction getDirectionByPath(EntityPointer head,
-                             PathPointer path);  // 從路徑資料判斷下一步方向
 
+// 回傳到目標位置的路徑串列
+PathPointer buildPath(PathPointer goal);
+
+// 計算兩點之間需要移動的步數
+int calcSteps(Location start, Location goal);
+
+// 判斷是否該節點已經拜訪過
+bool visited(Location loc);
+
+// 從路徑資料判斷下一步方向
+Direction getDirectionByPath(EntityPointer head,
+                             PathPointer path);
+
+// 喪屍AI
 Direction zombieAI(int field[][GRID_SIDE],
                    EntityPointer zombie,
-                   Location target);  // 喪屍AI
+                   Location target);
+
+// 生存者AI
 Direction playerAI(int field[][GRID_SIDE],
                    EntityPointer player,
-                   EntityPointer zombie);  // 生存者AI
+                   EntityPointer zombie);
+
+// 評估前往最佳地點
 Location evalBestLocation(int field[][GRID_SIDE], EntityPointer player, EntityPointer zombie);
 
+// 計算到達第 k 資源花費
 ResourceEvaluation evalResourceCost(int field[][GRID_SIDE], EntityPointer player, EntityPointer zombie, int k);
 
-int pathCost(int field[][GRID_SIDE], PathPointer path, EntityPointer zombie);
+// 計算路徑花費
+int pathCost(PathPointer path);
 
+// 計算距離
 int calculateDistance(int row, int col, int row1, int col1);
 
 struct PathNode pathQueue[MAX_QUEUE_SIZE];  // 宣告將要拜訪的節點柱列
@@ -868,27 +927,6 @@ bool visited(Location loc) {
     return false;
 }
 
-/*
-// 尋找最接近資源
-Location findNearestResource(int field[][GRID_SIDE], EntityPointer me) {
-    int rowDis, colDis, row, col, nearest = 100000;
-    Location nearestFood = {-1, -1};
-    for (row = 0; row < GRID_SIDE; row++) {
-        for (col = 0; col < GRID_SIDE; col++) {
-            if (field[row][col] == RESOURCE) {
-                rowDis = abs(row - me->row);
-                colDis = abs(col - me->col);
-                if (nearest > (rowDis + colDis)) {
-                    nearest = (rowDis + colDis);
-                    nearestFood.row = row;
-                    nearestFood.col = col;
-                }
-            }
-        }
-    }
-    return nearestFood;
-} */
-
 // 找尋最近的第 k 個資源
 Location findNearestKthResource(int field[][GRID_SIDE], EntityPointer me, int k) {
     std::vector<Location> resources;
@@ -990,7 +1028,6 @@ PathPointer playerFindPath(int field[][GRID_SIDE],
         int dirSize = 4;
         int iDir[] = {1, 0, -1, 0};
         int jDir[] = {0, 1, 0, -1};
-        int distanceThreshold = 10;
         int i, j;
         for (i = 0, j = 0; i < dirSize; i++, j++) {
             Location neighborLoc = {current->loc.row + iDir[i],
@@ -1005,9 +1042,10 @@ PathPointer playerFindPath(int field[][GRID_SIDE],
                 // 檢查特定範圍內殭屍
                 EntityPointer currZombie = zombie;
                 while (currZombie != nullptr) {
-                    int distanceToZombie = calculateDistance(neighborLoc.row, neighborLoc.col, currZombie->row, currZombie->col);
-                    if (distanceToZombie <= distanceThreshold) {
-                        cost += distanceToZombie;
+                    int distanceToZombie = calculateDistance(neighborLoc.row, neighborLoc.col, currZombie->row,
+                                                             currZombie->col);
+                    if (distanceToZombie <= DETECT_ZOMBIE_RANGE) {
+                        cost += (DETECT_ZOMBIE_RANGE - distanceToZombie) * 5;
                     }
                     currZombie = currZombie->next;
                 }
@@ -1084,10 +1122,11 @@ Direction playerAI(int field[][GRID_SIDE],
     return playerDirect;
 }
 
+// 評估前往最佳地點
 Location evalBestLocation(int field[][GRID_SIDE], EntityPointer player, EntityPointer zombie) {
     std::vector<ResourceEvaluation> evaluations;
 
-    int k = 10;
+    int k = MAX_EVAL_PATH;
 
     for (int i = 1; i <= k; i++) {
         ResourceEvaluation evaluation = evalResourceCost(field, player, zombie, i);
@@ -1108,6 +1147,7 @@ Location evalBestLocation(int field[][GRID_SIDE], EntityPointer player, EntityPo
     return evaluations[0].resource;
 }
 
+// 計算到達第 k 資源花費
 ResourceEvaluation evalResourceCost(int field[][GRID_SIDE], EntityPointer player, EntityPointer zombie, int k) {
     Location start = {player->row, player->col};
     Location resource = findNearestKthResource(field, player, k);
@@ -1118,49 +1158,22 @@ ResourceEvaluation evalResourceCost(int field[][GRID_SIDE], EntityPointer player
         return {resource, 999};
     }
 
-    int cost = pathCost(field, path, zombie);
+    int cost = pathCost(path);
 
     return {resource, cost};
 }
 
-int pathCost(int field[][GRID_SIDE], PathPointer path, EntityPointer zombie) {
-    int cost = 0;
-    int distanceThreshold = 10;
-
+// 計算路徑花費
+int pathCost(PathPointer path) {
     while (path->next != nullptr) {
-        // 檢查特定範圍內殭屍
-        EntityPointer currZombie = zombie;
-        while (currZombie != nullptr) {
-            int distanceToZombie = calculateDistance(path->loc.row, path->loc.col, currZombie->row, currZombie->col);
-            if (distanceToZombie <= distanceThreshold) {
-                cost += distanceToZombie;
-            }
-            currZombie = currZombie->next;
-        }
-
-        // 找尋周圍牆壁狀態
-        int wallCount = 0;
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 1; dy++) {
-                int newRow = path->loc.row + dx;
-                int newCol = path->loc.col + dy;
-                if (IsAtWall(field, newRow, newCol)) {
-                    wallCount++;
-                }
-            }
-        }
-
-        cost += wallCount * wallCount * 5;
-
         path = path->next;
     }
 
-    cost += path->cost;
-
-    return cost;
+    return path->cost;
 }
 
+// 計算距離
 int calculateDistance(int row, int col, int row1, int col1) {
-    return abs(row1 - row) + abs(col1- col);
+    return abs(row1 - row) + abs(col1 - col);
 }
 
