@@ -15,7 +15,7 @@
 #define INIT_SPEED 80        // 設定初始移動速度
 #define MAX_QUEUE_SIZE 1600  // 設定柱列大小
 #define DETECT_ZOMBIE_RANGE 8 //玩家評估殭屍接近範圍
-#define MAX_EVAL_PATH 10      //完架建立評估路徑數量
+#define MAX_EVAL_PATH 10      //玩家建立評估路徑數量
 
 std::random_device rd;
 std::mt19937 generator(rd());
@@ -219,6 +219,8 @@ int totalTime = 0;               // 紀錄遊戲時間
 int stepCount = 0;               // 步數計數器
 int const scorePerResource = 1;  // 每一份資源可得分數
 bool IFPlayAI = false;           // 是否開啟AI模式
+bool showTarget = true;          // 是否顯示循路目標
+Location prevTarget;             // 紀錄上個循路位置
 
 // 主程式
 int main() {
@@ -1113,6 +1115,19 @@ Direction playerAI(int field[][GRID_SIDE],
     Location target = evalBestLocation(field, player, zombie);
 
     PathPointer path = playerFindPath(field, start, target, zombie);
+
+    if (showTarget) {
+        switch (field[prevTarget.row][prevTarget.col]) {
+            case WALL:  // 牆在矩陣中的值是1
+                drawSquare(prevTarget.row, prevTarget.col, YELLOW);
+                break;
+            case RESOURCE:  // 資源在矩陣中的值是2
+                drawSquare(prevTarget.row, prevTarget.col, GREEN);
+                break;
+        }
+        drawSquare(target.row, target.col, LIGHTBLUE);
+        prevTarget = target;
+    }
 
     if (path) {
         playerDirect = getDirectionByPath(player, path);
