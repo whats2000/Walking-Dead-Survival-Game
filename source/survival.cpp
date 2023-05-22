@@ -15,7 +15,7 @@
 #define INIT_SPEED 80        // 設定初始移動速度
 #define MAX_QUEUE_SIZE 1600  // 設定柱列大小
 #define DETECT_ZOMBIE_RANGE 8 //玩家評估殭屍接近範圍
-#define MAX_EVAL_PATH 10      //完架建立評估路徑數量
+#define MAX_EVAL_PATH 10      //玩家建立評估路徑數量
 
 std::random_device rd;
 std::mt19937 generator(rd());
