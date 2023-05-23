@@ -5,17 +5,17 @@
 #include <vector>
 #include <algorithm>
 
-#define SCREEN_HEIGHT 500    // 設定遊戲視窗高度
-#define SCREEN_WIDTH 500     // 設定遊戲視窗寬度
-#define GRID_SIDE 40         // 設定遊戲方陣每邊格子數量
-#define LEFT_MARGIN 30      // 設定左邊界
-#define TOP_MARGIN 40       // 設定上邊界
-#define RESOURCE_AMOUNT 1    // 設定每次產生資源數量
-#define PER_RESOURCE_KILL 5  // 設定多少資源數量可以殺掉一隻喪屍
-#define INIT_SPEED 80        // 設定初始移動速度
-#define MAX_QUEUE_SIZE 1600  // 設定柱列大小
-#define DETECT_ZOMBIE_RANGE 8 //玩家評估殭屍接近範圍
-#define MAX_EVAL_PATH 10      //玩家建立評估路徑數量
+#define SCREEN_HEIGHT 500     // 設定遊戲視窗高度
+#define SCREEN_WIDTH 500      // 設定遊戲視窗寬度
+#define GRID_SIDE 40          // 設定遊戲方陣每邊格子數量
+#define LEFT_MARGIN 30        // 設定左邊界
+#define TOP_MARGIN 40         // 設定上邊界
+#define RESOURCE_AMOUNT 1     // 設定每次產生資源數量
+#define PER_RESOURCE_KILL 5   // 設定多少資源數量可以殺掉一隻喪屍
+#define INIT_SPEED 80         // 設定初始移動速度
+#define MAX_QUEUE_SIZE 1600   // 設定柱列大小
+#define DETECT_ZOMBIE_RANGE 8 // 玩家評估殭屍接近範圍
+#define MAX_EVAL_PATH 10      // 玩家建立評估路徑數量
 
 std::random_device rd;
 std::mt19937 generator(rd());
@@ -751,6 +751,8 @@ Direction zombieAI(int field[][GRID_SIDE],
     } else
         zombieDirect = safeDirect4Zombie(field, zombie);
 
+    free(path);
+
     return zombieDirect;
 }
 
@@ -895,10 +897,12 @@ bool IsInPathQueue(PathNode pathNode) {
 
 // 回傳到目標位置的路徑串列
 PathPointer buildPath(PathPointer goal) {
-    printf("buildPath ");
-    printf("(%d, %d)\n", goal->loc.row, goal->loc.col);
-    if (goal->parent == nullptr)
+    //printf("buildPath ");
+    //printf("(%d, %d)\n", goal->loc.row, goal->loc.col);
+    if (goal->parent == nullptr) {
+        free(goal);
         return nullptr;
+    }
     PathPointer head = goal;
     head->next = nullptr;
     PathPointer temp = head;
@@ -1064,7 +1068,7 @@ PathPointer playerFindPath(int field[][GRID_SIDE],
                     }
                 }
 
-                cost += current->cost + 1;
+                cost += current->cost;
 
                 if (wallCount > 3)
                     cost += wallCount * wallCount * 5;
@@ -1134,6 +1138,8 @@ Direction playerAI(int field[][GRID_SIDE],
     } else
         playerDirect = safeDirect(field, player, zombie);
 
+    free(path);
+
     return playerDirect;
 }
 
@@ -1158,6 +1164,11 @@ Location evalBestLocation(int field[][GRID_SIDE], EntityPointer player, EntityPo
         return {-1, -1};
     }
 
+    printf("PathFind: [%d, %d]  Cost: %d\n",
+           evaluations[0].resource.row,
+           evaluations[0].resource.col,
+           evaluations[0].cost);
+
     // 回傳最低成本座標
     return evaluations[0].resource;
 }
@@ -1174,6 +1185,8 @@ ResourceEvaluation evalResourceCost(int field[][GRID_SIDE], EntityPointer player
     }
 
     int cost = pathCost(path);
+
+    free(path);
 
     return {resource, cost};
 }
