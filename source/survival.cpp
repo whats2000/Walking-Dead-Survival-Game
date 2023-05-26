@@ -16,6 +16,9 @@
 #define MAX_QUEUE_SIZE 1600   // 設定柱列大小
 #define DETECT_ZOMBIE_RANGE 8 // 玩家評估殭屍接近範圍
 #define MAX_EVAL_PATH 10      // 玩家建立評估路徑數量
+#define MAX_LEVEL 5           // 最高關卡數
+#define PASS_SCORE 5          // 基礎通關分數
+#define MAX_PASS_TIME 20      // 一關的通關時間(second)
 
 std::random_device rd;
 std::mt19937 generator(rd());
@@ -93,6 +96,9 @@ bool IsGameOver(EntityPointer zombie,
 
 // 遊戲結束訊息
 char showGameOverMsg();
+
+// 遊戲通關訊息
+char showGamePassMsg();
 
 // 顯示遊戲相關資訊
 void showInfo();
@@ -221,7 +227,7 @@ struct PathNode pathQueue[MAX_QUEUE_SIZE];  // 宣告將要拜訪的節點柱列
 int front;  // queue 第一個元素前一個位置
 int rear;   // queue 最後一個元素的位置
 
-int speed;                         // 遊戲移動速度
+int speed = INIT_SPEED;            // 遊戲移動速度
 int scoreSum = 0;                  // 紀錄分數
 int killedCount = 0;               // 殺死喪屍數量
 int totalTime = 0;                 // 紀錄遊戲時間
@@ -231,6 +237,8 @@ bool IFPlayAI = true;              // 是否開啟AI模式
 bool showTarget = true;            // 是否顯示循路目標
 Location prevTarget;               // 紀錄上個循路位置
 int found[13][13] = {false}; // 迷宮房間紀錄訪問
+int level = 1;                     // 關卡數
+int level_sum_score = PASS_SCORE;  // 過關所需分數
 
 // 主程式
 int main() {
@@ -329,7 +337,7 @@ int main() {
         key = playGame(field, zombie, player);  // 進行遊戲
         if (key == 'q' || key == 'Q')
             closeGame();  // 如果生存者輸入'q'離開遊戲
-        else {
+        else if (key == 's' || key == 'S') {
             generateMaze(field);
             // 釋放勇者的鏈結資源
             while (player != nullptr) {
@@ -343,7 +351,16 @@ int main() {
                 zombie = zombie->next;
                 delete temp;
             }
+            level = 1;
+            scoreSum = 0;
+            level_sum_score = PASS_SCORE;
+            totalTime = 0;
+            speed = INIT_SPEED;
             continue;  // 如果生存者輸入's' 繼續遊戲
+        } else if (key == 'c' || key == 'C') {
+            totalTime = 0;
+            speed = INIT_SPEED / (1 + 0.25 * (level - 1));
+            continue;
         }
     }
 }
@@ -514,6 +531,11 @@ char playGame(int field[][GRID_SIDE], EntityPointer zombie, EntityPointer player
                 zombie);  // 判斷生存者是否有收集到資源，如果有增加分數
 
         showInfo();  // 顯示時間和分數資訊
+        if (totalTime / 1000 > MAX_PASS_TIME && scoreSum < level_sum_score) {
+            return char(showGameOverMsg());
+        } else if (scoreSum >= level_sum_score) {
+            return showGamePassMsg();
+        }
 
         if (IsGameOver(zombie, player, field))  // 判斷是否符合遊戲結束條件，
             return char(showGameOverMsg());  // 顯示遊戲結束訊息，並等待生存者輸入選項
@@ -671,23 +693,27 @@ bool IsAtZombie(EntityPointer zombie, int row, int col) {
 // 遊戲結束訊息
 char showGameOverMsg() {
     // cleardevice(); //清理所有螢幕資料，如果希望只顯示訊息時，取消註解
-    int i = 0;
     char msg1[15] = "Game Over!!";
+    if (totalTime / 1000 > MAX_PASS_TIME) {
+        strcpy(msg1, "Time  Out!!");
+    }
+    int i = 0;
+
     char msg2[40] = "press [q] to quit or [s] to restart!!";
     for (;; i++) {
         setcolor(i % 14);
         settextstyle(TRIPLEX_FONT, HORIZ_DIR, 7);
-        outtextxy(0, SCREEN_HEIGHT / 2, msg1);
+        outtextxy(50, SCREEN_HEIGHT / 2, msg1);
 
         setcolor(WHITE);
         settextstyle(TRIPLEX_FONT, HORIZ_DIR, 2);
-        outtextxy(20, SCREEN_HEIGHT / 2 + 70, msg2);
+        outtextxy(60, SCREEN_HEIGHT / 2 + 70, msg2);
 
         delay(200);
 
         setcolor(BLACK);
         settextstyle(TRIPLEX_FONT, HORIZ_DIR, 7);
-        outtextxy(0, SCREEN_HEIGHT / 2, msg1);
+        outtextxy(20, SCREEN_HEIGHT / 2, msg1);
 
         if (kbhit()) {
             char key;
@@ -699,9 +725,58 @@ char showGameOverMsg() {
     }
 }
 
+// 過關的訊息
+char showGamePassMsg() {
+    // cleardevice(); //清理所有螢幕資料，如果希望只顯示訊息時，取消註解
+    level++;
+    level_sum_score += PASS_SCORE * level;
+
+    int i = 0;
+    char msg1[21] = "";
+    char msg2[40] = "";
+    sprintf(msg1, "You Pass Level %d!!", level);
+    if (level <= MAX_LEVEL) {
+        strcpy(msg2, "press [q] to quit or [c] to next level");
+    } else {
+        strcpy(msg2, "press [q] to quit or [s] to restart!!!");
+    }
+
+    for (;; i++) {
+        setcolor(i % 14);
+        settextstyle(TRIPLEX_FONT, HORIZ_DIR, 5);
+        outtextxy(20, SCREEN_HEIGHT / 2, msg1);
+
+        setcolor(WHITE);
+        settextstyle(TRIPLEX_FONT, HORIZ_DIR, 1);
+        outtextxy(60, SCREEN_HEIGHT / 2 + 70, msg2);
+
+        delay(200);
+
+        setcolor(BLACK);
+        settextstyle(TRIPLEX_FONT, HORIZ_DIR, 5);
+        outtextxy(20, SCREEN_HEIGHT / 2, msg1);
+
+        if (kbhit()) {
+            char key;
+            key = char(getch());
+            if (level <= MAX_LEVEL) {
+                if (key == 'q' || key == 'Q' || key == 's' || key == 'S' || key == 'c' || key == 'C') {
+                    return key;
+                }
+            } else {
+                if (key == 'q' || key == 'Q' || key == 's' || key == 'S') {
+                    return key;
+                }
+            }
+
+        }
+    }
+}
+
 // 顯示遊戲相關資訊
 void showInfo() {
     totalTime += speed;
+    char levelMsg[45] = "";
     char timeMsg[45] = " Time:";
     char scoreMsg[45] = "Score:";
     char killedMsg[50] = "Killed Zombie:";
@@ -729,6 +804,12 @@ void showInfo() {
     settextstyle(COMPLEX_FONT, HORIZ_DIR, 1);
     outtextxy(0, 19, scoreMsg);
 
+    sprintf(levelMsg, "Level: %d Goal: %2d", level, level_sum_score);
+
+    setcolor(WHITE);
+    settextstyle(COMPLEX_FONT, HORIZ_DIR, 1);
+    outtextxy(250, 0, levelMsg);
+
     sprintf(killed, "%3d", killedCount);
     strcat(killedMsg, killed);
 
@@ -737,9 +818,9 @@ void showInfo() {
     outtextxy(250, 19, killedMsg);
 
     if (IFPlayAI) {
-        strcat(modeMsg, "AI Mode    ");
+        strcat(modeMsg, " AI Mode    ");
     } else {
-        strcat(modeMsg, "Player Mode");
+        strcat(modeMsg, " Player Mode");
     }
 
     setcolor(LIGHTMAGENTA);
@@ -1360,4 +1441,3 @@ int pathCost(PathPointer path) {
 int calculateDistance(int row, int col, int row1, int col1) {
     return abs(row1 - row) + abs(col1 - col);
 }
-
