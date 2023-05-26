@@ -11,7 +11,7 @@
 #define LEFT_MARGIN 30        // 設定左邊界
 #define TOP_MARGIN 40         // 設定上邊界
 #define RESOURCE_AMOUNT 1     // 設定每次產生資源數量
-#define PER_RESOURCE_KILL 5   // 設定多少資源數量可以殺掉一隻喪屍
+#define PER_RESOURCE_KILL 5   // 設定多少資源數量可以殺掉一個喪屍
 #define INIT_SPEED 80         // 設定初始移動速度
 #define MAX_QUEUE_SIZE 1600   // 設定柱列大小
 #define DETECT_ZOMBIE_RANGE 8 // 玩家評估殭屍接近範圍
@@ -70,7 +70,16 @@ struct ResourceEvaluation {
 void openWindow();
 
 // 處理遊戲結束邏輯
-void closeGame(EntityPointer zombie);
+void closeGame();
+
+// 連接迷宮房間
+void connectVertex(int field[][GRID_SIDE], Location vertex1, Location vertex2);
+
+// DFS 演算迷宮生成
+void vertexDfsVisit(int field[][GRID_SIDE], Location startVertex);
+
+// 生成迷宮
+void generateMaze(int field[][GRID_SIDE]);
 
 // 遊戲進行邏輯
 char playGame(int field[][GRID_SIDE],
@@ -83,7 +92,7 @@ bool IsGameOver(EntityPointer zombie,
                 int field[][GRID_SIDE]);
 
 // 遊戲結束訊息
-int showGameOverMsg();
+char showGameOverMsg();
 
 // 顯示遊戲相關資訊
 void showInfo();
@@ -137,7 +146,7 @@ void addZombie(int field[][GRID_SIDE],
                EntityPointer zombie,
                EntityPointer player);
 
-// 隨機殺掉一隻喪屍
+// 隨機殺掉一個喪屍
 void killZombie(EntityPointer zombie);
 
 // 計算下一步的座標
@@ -209,117 +218,258 @@ int pathCost(PathPointer path);
 int calculateDistance(int row, int col, int row1, int col1);
 
 struct PathNode pathQueue[MAX_QUEUE_SIZE];  // 宣告將要拜訪的節點柱列
-int front;  // queue 第一個元素的前一個位置
+int front;  // queue 第一個元素前一個位置
 int rear;   // queue 最後一個元素的位置
 
-int speed;                       // 遊戲移動速度
-int scoreSum = 0;                // 紀錄分數
-int killedCount = 0;             // 殺死喪屍數量
-int totalTime = 0;               // 紀錄遊戲時間
-int stepCount = 0;               // 步數計數器
-int const scorePerResource = 1;  // 每一份資源可得分數
-bool IFPlayAI = false;           // 是否開啟AI模式
-bool showTarget = true;          // 是否顯示循路目標
-Location prevTarget;             // 紀錄上個循路位置
+int speed;                         // 遊戲移動速度
+int scoreSum = 0;                  // 紀錄分數
+int killedCount = 0;               // 殺死喪屍數量
+int totalTime = 0;                 // 紀錄遊戲時間
+int stepCount = 0;                 // 步數計數器
+int const scorePerResource = 1;    // 每一份資源可得分數
+bool IFPlayAI = true;              // 是否開啟AI模式
+bool showTarget = true;            // 是否顯示循路目標
+Location prevTarget;               // 紀錄上個循路位置
+int found[13][13] = {false}; // 迷宮房間紀錄訪問
 
 // 主程式
 int main() {
     openWindow();
-    char key = 0;
+    char key = ' ';
+
+    // 設定遊戲場和障礙物
+    int field[GRID_SIDE][GRID_SIDE] = {
+            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+            {1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1},
+            {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+            {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
+            {1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0,
+                    0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1,
+                    0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1},
+            {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
+            {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
+            {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
+            {1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,
+                    0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
+            {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
+            {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
+            {1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1,
+                    0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+                    0, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1,
+                    0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1},
+            {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1},
+            {1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0,
+                    0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
 
     while (key != 'q' && key != 'Q') {
-        // 設定遊戲場和障礙物
-        int field[GRID_SIDE][GRID_SIDE] = {
-                {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-                {1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1},
-                {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-                {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-                {1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0,
-                        0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1,
-                        0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1},
-                {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-                {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-                {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-                {1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,
-                        0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-                {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-                {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1},
-                {1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1,
-                        0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-                        0, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1,
-                        0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1},
-                {1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1},
-                {1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0,
-                        0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-                {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
-
-        Entity headPlayer = {2, 4, RIGHT, nullptr};  // 設定勇者初始位置和方向
-        Entity headZombie = {15, 15, RIGHT, nullptr};  // 設定喪屍屍頭初始位置和方向
+        Entity headPlayer = {1, 1, RIGHT, nullptr};  // 設定勇者初始位置和方向
+        Entity headZombie = {16, 16, RIGHT, nullptr};  // 設定喪屍屍頭初始位置和方向
         EntityPointer zombie = &headZombie;
         EntityPointer player = &headPlayer;
+
         key = playGame(field, zombie, player);  // 進行遊戲
         if (key == 'q' || key == 'Q')
-            closeGame(zombie);  // 如果生存者輸入'q'離開遊戲
-        else if (key == 's' || key == 'S') {
+            closeGame();  // 如果生存者輸入'q'離開遊戲
+        else {
+            generateMaze(field);
+            // 釋放勇者的鏈結資源
+            while (player != nullptr) {
+                EntityPointer temp = player;
+                player = player->next;
+                delete temp;
+            }
+            // 釋放喪屍的鏈結資源
+            while (zombie != nullptr) {
+                EntityPointer temp = zombie;
+                zombie = zombie->next;
+                delete temp;
+            }
             continue;  // 如果生存者輸入's' 繼續遊戲
+        }
+    }
+}
+
+// 連接迷宮房間
+void connectVertex(int field[][GRID_SIDE], Location vertex1, Location vertex2) {
+    switch (vertex1.row - vertex2.row) {
+        // 打掉 vertex 1 上方
+        case 1:
+            field[1 + vertex1.row * 3 - 1][1 + vertex1.col * 3] = 0;
+            field[1 + vertex1.row * 3 - 1][1 + vertex1.col * 3 + 1] = 0;
+            break;
+            // 打掉 vertex 1 下方
+        case -1:
+            field[1 + vertex1.row * 3 + 2][1 + vertex1.col * 3] = 0;
+            field[1 + vertex1.row * 3 + 2][1 + vertex1.col * 3 + 1] = 0;
+            break;
+        default:
+            break;
+    }
+
+    switch (vertex1.col - vertex2.col) {
+        // 打掉 vertex 1 左方
+        case 1:
+            field[1 + vertex1.row * 3][1 + vertex1.col * 3 - 1] = 0;
+            field[1 + vertex1.row * 3 + 1][1 + vertex1.col * 3 - 1] = 0;
+            break;
+            // 打掉 vertex 1 右方
+        case -1:
+            field[1 + vertex1.row * 3][1 + vertex1.col * 3 + 2] = 0;
+            field[1 + vertex1.row * 3 + 1][1 + vertex1.col * 3 + 2] = 0;
+            break;
+        default:
+            break;
+    }
+}
+
+// DFS 演算迷宮生成
+void vertexDfsVisit(int field[][GRID_SIDE], Location startVertex) {
+    int searchDirection = dist(generator) % 4; // 對應 0: 上 1: 下 2: 左 3: 右
+    found[startVertex.row][startVertex.col] = true;
+
+    for (int i = 0; i < 4; i++) {
+        switch ((searchDirection + i) % 4) {
+            case 0:
+                if (startVertex.row != 0) {
+                    if (!found[startVertex.row - 1][startVertex.col]) {
+                        connectVertex(field, startVertex, {startVertex.row - 1, startVertex.col});
+
+                        vertexDfsVisit(field, {startVertex.row - 1, startVertex.col});
+                    } else if (dist(generator) % 5 == 0) {
+                        connectVertex(field, startVertex, {startVertex.row - 1, startVertex.col});
+                    }
+                }
+                break;
+            case 1:
+                if (startVertex.row != 12) {
+                    if (!found[startVertex.row + 1][startVertex.col]) {
+                        connectVertex(field, startVertex, {startVertex.row + 1, startVertex.col});
+
+                        vertexDfsVisit(field, {startVertex.row + 1, startVertex.col});
+                    } else if (dist(generator) % 5 == 0) {
+                        connectVertex(field, startVertex, {startVertex.row + 1, startVertex.col});
+                    }
+                }
+                break;
+            case 2:
+                if (startVertex.col != 0) {
+                    if (!found[startVertex.row][startVertex.col - 1]) {
+                        connectVertex(field, startVertex, {startVertex.row, startVertex.col - 1});
+
+                        vertexDfsVisit(field, {startVertex.row, startVertex.col - 1});
+                    } else if (dist(generator) % 5 == 0) {
+                        connectVertex(field, startVertex, {startVertex.row, startVertex.col - 1});
+                    }
+                }
+                break;
+            case 3:
+                if (startVertex.col != 12) {
+                    if (!found[startVertex.row][startVertex.col + 1]) {
+                        connectVertex(field, startVertex, {startVertex.row, startVertex.col + 1});
+
+                        vertexDfsVisit(field, {startVertex.row, startVertex.col + 1});
+                    } else if (dist(generator) % 5 == 0) {
+                        connectVertex(field, startVertex, {startVertex.row, startVertex.col + 1});
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+// 生成迷宮
+void generateMaze(int field[][GRID_SIDE]) {
+    // 初始化迷宮地圖為全牆壁
+    for (int i = 0; i < GRID_SIDE; ++i) {
+        for (int j = 0; j < GRID_SIDE; ++j) {
+            if (i % 3 == 0 || j % 3 == 0) {
+                field[i][j] = 1; // 牆壁
+            } else {
+                field[i][j] = 0; // 通道
+            }
+        }
+    }
+
+    for (auto &i: found) {
+        for (int &j: i) {
+            j = 0;
+        }
+    }
+
+    vertexDfsVisit(field, {dist(generator) % 13, dist(generator) % 13});
+
+    for (int i = 3; i < 19; i += 3) {
+        field[1][i] = 0;
+        field[2][i] = 0;
+    }
+
+    // 删除上下左右都为空的牆壁
+    for (int i = 3; i < GRID_SIDE - 3; i += 1) {
+        for (int j = 3; j < GRID_SIDE - 3; j += 1) {
+            if (field[i - 1][j] == 0 && field[i + 1][j] == 0 && field[i][j - 1] == 0 && field[i][j + 1] == 0) {
+                field[i][j] = 0;
+            }
         }
     }
 }
@@ -331,8 +481,7 @@ void openWindow() {
 }
 
 // 處理遊戲結束邏輯
-void closeGame(EntityPointer zombie) {
-    free(zombie);
+void closeGame() {
     exit(0);
 }
 
@@ -410,8 +559,8 @@ void drawGameField(int field[][GRID_SIDE]) {
 
 // 繪製方塊
 void drawSquare(int row, int col, int color) {
-    int squareHeight = SCREEN_HEIGHT / GRID_SIDE;
-    int SquareWidth = SCREEN_WIDTH / GRID_SIDE;
+    const int squareHeight = SCREEN_HEIGHT / GRID_SIDE;
+    const int SquareWidth = SCREEN_WIDTH / GRID_SIDE;
     int left, right, bottom, top;
     left = LEFT_MARGIN + col * SquareWidth + col;
     top = TOP_MARGIN + row * squareHeight + row;
@@ -520,7 +669,7 @@ bool IsAtZombie(EntityPointer zombie, int row, int col) {
 }
 
 // 遊戲結束訊息
-int showGameOverMsg() {
+char showGameOverMsg() {
     // cleardevice(); //清理所有螢幕資料，如果希望只顯示訊息時，取消註解
     int i = 0;
     char msg1[15] = "Game Over!!";
@@ -683,7 +832,7 @@ void playerCollectResource(int field[][GRID_SIDE],
         scoreSum += scorePerResource;   // 紀錄分數
         createResource(field, player);  // 產生新的資源
 
-        // 收集一定數量的資源可以消滅一隻喪屍
+        // 收集一定數量的資源可以消滅一個喪屍
         if (scoreSum % PER_RESOURCE_KILL == 0)
             killZombie(zombie);
     }
@@ -692,15 +841,16 @@ void playerCollectResource(int field[][GRID_SIDE],
 // 增加喪屍數量
 void addZombie(int field[][GRID_SIDE], EntityPointer zombie, EntityPointer player) {
     int row, col;
-    EntityPointer tail;
-    auto newNode =
-            (EntityPointer) malloc(sizeof(Entity));  // 初始化一個新節點
+    EntityPointer tail = zombie;
 
     // 尋找最後一個喪屍節點
-    tail = zombie;
     while (tail->next != nullptr) {
         tail = tail->next;
     }
+
+    // 建立新的喪屍節點
+    auto newNode = new Entity;
+
     // 將最後一位喪屍的方向屬性給新節點
     newNode->direct = tail->direct;
 
@@ -712,19 +862,19 @@ void addZombie(int field[][GRID_SIDE], EntityPointer zombie, EntityPointer playe
 
     newNode->row = row;
     newNode->col = col;
+    newNode->next = nullptr;
 
     tail->next = newNode;  // 將尾巴節點連接到新節點
-    newNode->next = nullptr;
 }
 
-// 殺掉一隻喪屍
+// 殺掉一個喪屍
 void killZombie(EntityPointer zombie) {
     EntityPointer temp, killed;
     temp = zombie;
 
     killed = zombie;
 
-    // 不會殺光所有喪屍，至少會保留一隻
+    // 不會殺光所有喪屍，至少會保留一個
     if (zombie->next == nullptr)
         return;
     while (killed->next != nullptr) {
@@ -734,7 +884,7 @@ void killZombie(EntityPointer zombie) {
     temp->next = killed->next;
     drawSquare(killed->row, killed->col, BLACK);
     printf("\n(%d, %d) is killed\n", killed->row, killed->col);
-    free(killed);
+    delete killed;
     killedCount++;
 }
 
@@ -751,7 +901,7 @@ Direction zombieAI(int field[][GRID_SIDE],
     } else
         zombieDirect = safeDirect4Zombie(field, zombie);
 
-    free(path);
+    delete path;
 
     return zombieDirect;
 }
@@ -801,6 +951,8 @@ PathPointer zombieFindPath(int field[][GRID_SIDE],
     while (!isPathQueueEmpty()) {
         sortPathQueue();
         PathPointer current = popPathQueue();
+        if (current == nullptr)
+            return nullptr;
         if (current->loc.row == goalLoc.row && current->loc.col == goalLoc.col)
             return buildPath(current);
         int dirSize = 4;
@@ -842,7 +994,7 @@ PathPointer popPathQueue() {
         return nullptr;
     }
     front++;
-    auto node = (PathPointer) malloc(sizeof(PathNode));
+    auto node = new PathNode;
     node->cost = pathQueue[front].cost;
     node->steps = pathQueue[front].steps;
     node->loc = pathQueue[front].loc;
@@ -900,7 +1052,7 @@ PathPointer buildPath(PathPointer goal) {
     //printf("buildPath ");
     //printf("(%d, %d)\n", goal->loc.row, goal->loc.col);
     if (goal->parent == nullptr) {
-        free(goal);
+        delete goal;
         return nullptr;
     }
     PathPointer head = goal;
@@ -914,6 +1066,7 @@ PathPointer buildPath(PathPointer goal) {
         temp = head;
     }
     //printf("nullptr\n");
+    delete goal;
     return head;
 }
 
@@ -1074,6 +1227,7 @@ PathPointer playerFindPath(int field[][GRID_SIDE],
                     cost += wallCount * wallCount * 5;
 
                 PathNode neighbor = {cost, steps, neighborLoc, current, nullptr};
+
                 if (!IsInPathQueue(neighbor)) {
                     addPathQueue(neighbor);
                 }
@@ -1138,7 +1292,7 @@ Direction playerAI(int field[][GRID_SIDE],
     } else
         playerDirect = safeDirect(field, player, zombie);
 
-    free(path);
+    delete path;
 
     return playerDirect;
 }
@@ -1180,13 +1334,15 @@ ResourceEvaluation evalResourceCost(int field[][GRID_SIDE], EntityPointer player
     PathPointer path = playerFindPath(field, start, resource, zombie);
 
     if (!path || resource.row == -1 || resource.col == -1) {
+        delete path;
+
         // 當找不到資源或無效路徑回傳該資源為無效花費
         return {resource, 999};
     }
 
     int cost = pathCost(path);
 
-    free(path);
+    delete path;
 
     return {resource, cost};
 }
