@@ -699,7 +699,7 @@ bool IsAtZombie(EntityPointer zombie, int row, int col) {
 char showGameOverMsg() {
     // cleardevice(); //清理所有螢幕資料，如果希望只顯示訊息時，取消註解
     char msg1[15] = "Game Over!!";
-    if (totalTime / 1000 > MAX_PASS_TIME) {
+    if (totalTime / 1000 > MAX_PASS_TIME && levelMode) {
         strcpy(msg1, "Time  Out!!");
     }
     int i = 0;
