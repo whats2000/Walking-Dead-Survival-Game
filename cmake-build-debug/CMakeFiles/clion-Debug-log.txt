@@ -1,1 +1,0 @@
-"C:\Program Files\JetBrains\CLion 2023.1.2\bin\cmake\win\x64\bin\cmake.exe" -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - MinGW Makefiles" -S C:\Users\eddie\OneDrive\文档\GitHub\Walking-Dead-Survival-Game -B C:\Users\eddie\OneDrive\文档\GitHub\Walking-Dead-Survival-Game\cmake-build-debug
