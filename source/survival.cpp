@@ -18,7 +18,7 @@
 #define MAX_EVAL_PATH 10      // 玩家建立評估路徑數量
 #define MAX_LEVEL 5           // 最高關卡數
 #define PASS_SCORE 5          // 基礎通關分數
-#define MAX_PASS_TIME 20      // 一關的通關時間(second)
+#define MAX_PASS_TIME 20      // 一關的通關時間 (second)
 
 std::random_device rd;
 std::mt19937 generator(rd());
@@ -239,6 +239,7 @@ Location prevTarget;               // 紀錄上個循路位置
 int found[13][13] = {false}; // 迷宮房間紀錄訪問
 int level = 1;                     // 關卡數
 int level_sum_score = PASS_SCORE;  // 過關所需分數
+bool levelMode = true;
 
 // 主程式
 int main() {
@@ -357,7 +358,7 @@ int main() {
             totalTime = 0;
             speed = INIT_SPEED;
             continue;  // 如果生存者輸入's' 繼續遊戲
-        } else if (key == 'c' || key == 'C') {
+        } else {
             totalTime = 0;
             speed = INIT_SPEED / (1 + 0.25 * (level - 1));
             continue;
@@ -531,10 +532,12 @@ char playGame(int field[][GRID_SIDE], EntityPointer zombie, EntityPointer player
                 zombie);  // 判斷生存者是否有收集到資源，如果有增加分數
 
         showInfo();  // 顯示時間和分數資訊
-        if (totalTime / 1000 > MAX_PASS_TIME && scoreSum < level_sum_score) {
-            return char(showGameOverMsg());
-        } else if (scoreSum >= level_sum_score) {
-            return showGamePassMsg();
+        if (levelMode) {
+            if (totalTime / 1000 > MAX_PASS_TIME && scoreSum < level_sum_score) {
+                return char(showGameOverMsg());
+            } else if (scoreSum >= level_sum_score) {
+                return showGamePassMsg();
+            }
         }
 
         if (IsGameOver(zombie, player, field))  // 判斷是否符合遊戲結束條件，
@@ -557,6 +560,8 @@ char playGame(int field[][GRID_SIDE], EntityPointer zombie, EntityPointer player
             else if (key == 'a')  // 決定是否改變模式
                 // ，主要有生存者模式和電腦操控的AI模式
                 IFPlayAI = !IFPlayAI;
+            else if (key == 'm')
+                levelMode = !levelMode;
         }
     }
 }
@@ -734,11 +739,12 @@ char showGamePassMsg() {
     int i = 0;
     char msg1[21] = "";
     char msg2[40] = "";
-    sprintf(msg1, "You Pass Level %d!!", level);
     if (level <= MAX_LEVEL) {
         strcpy(msg2, "press [q] to quit or [c] to next level");
+        sprintf(msg1, "You Pass Level %d!!", level - 1);
     } else {
         strcpy(msg2, "press [q] to quit or [s] to restart!!!");
+        strcpy(msg1, "You Pass All Level!!");
     }
 
     for (;; i++) {
@@ -781,8 +787,9 @@ void showInfo() {
     char scoreMsg[45] = "Score:";
     char killedMsg[50] = "Killed Zombie:";
     char modeMsg[20] = "";
+    char levelModeMsg[20] = "";
     char optMsg1[50] = "press [q] to quit, [s] to restart or";
-    char optMsg2[50] = "press [a] to change mode.";
+    char optMsg2[60] = "press [a] to toggle AI mode, [m] to toggle level mode";
 
     char time[10];
     char score[10];
@@ -823,9 +830,19 @@ void showInfo() {
         strcat(modeMsg, " Player Mode");
     }
 
+    if (levelMode) {
+        strcat(levelModeMsg, " Level ON ");
+    } else {
+        strcat(levelModeMsg, " Level OFF");
+    }
+
     setcolor(LIGHTMAGENTA);
     settextstyle(COMPLEX_FONT, HORIZ_DIR, 1);
     outtextxy(SCREEN_HEIGHT - LEFT_MARGIN * 2, 0, modeMsg);
+
+    setcolor(LIGHTMAGENTA);
+    settextstyle(COMPLEX_FONT, HORIZ_DIR, 1);
+    outtextxy(SCREEN_HEIGHT - LEFT_MARGIN * 2, 19, levelModeMsg);
 
     setcolor(LIGHTGREEN);
     settextstyle(COMPLEX_FONT, HORIZ_DIR, 1);
