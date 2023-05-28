@@ -4,6 +4,8 @@
 #include <random>
 #include <vector>
 #include <algorithm>
+#include <functional>
+#include <fstream>
 
 #define SCREEN_HEIGHT 500     // 設定遊戲視窗高度
 #define SCREEN_WIDTH 500      // 設定遊戲視窗寬度
@@ -19,6 +21,7 @@
 #define MAX_LEVEL 5           // 最高關卡數
 #define PASS_SCORE 5          // 基礎通關分數
 #define MAX_PASS_TIME 20      // 一關的通關時間 (second)
+#define MAX_SCORES 10         // 排行榜紀錄數量
 
 std::random_device rd;
 std::mt19937 generator(rd());
@@ -223,6 +226,15 @@ int pathCost(PathPointer path);
 // 計算距離
 int calculateDistance(int row, int col, int row1, int col1);
 
+// 展示排行榜
+char displayLeaderboard(const std::vector<int> &scores);
+
+// 更新排行榜
+void updateLeaderboard(std::vector<int> &scores, int newScore);
+
+// 加載排行榜
+void loadLeaderboard(std::vector<int> &scores);
+
 struct PathNode pathQueue[MAX_QUEUE_SIZE];  // 宣告將要拜訪的節點柱列
 int front;  // queue 第一個元素前一個位置
 int rear;   // queue 最後一個元素的位置
@@ -239,10 +251,13 @@ Location prevTarget;               // 紀錄上個循路位置
 int found[13][13] = {false}; // 迷宮房間紀錄訪問
 int level = 1;                     // 關卡數
 int level_sum_score = PASS_SCORE;  // 過關所需分數
-bool levelMode = true;
+bool levelMode = true;             // 是否開啟關卡模式
+std::vector<int> leaderboard(MAX_SCORES, 0); // 用於存儲分數的矩陣
 
 // 主程式
 int main() {
+    loadLeaderboard(leaderboard);
+
     openWindow();
     char key = ' ';
 
@@ -358,6 +373,34 @@ int main() {
             totalTime = 0;
             speed = INIT_SPEED;
             continue;  // 如果生存者輸入's' 繼續遊戲
+        } else if (key == 'r' || key == 'R') {
+            key = displayLeaderboard(leaderboard);// 顯示排行榜
+
+            if (key == 'q' || key == 'Q')
+                closeGame();  // 如果生存者輸入'q'離開遊戲
+            else if (key == 's' || key == 'S') {
+
+                generateMaze(field);
+                // 釋放勇者的鏈結資源
+                while (player != nullptr) {
+                    EntityPointer temp = player;
+                    player = player->next;
+                    delete temp;
+                }
+                // 釋放喪屍的鏈結資源
+                while (zombie != nullptr) {
+                    EntityPointer temp = zombie;
+                    zombie = zombie->next;
+                    delete temp;
+                }
+                level = 1;
+                scoreSum = 0;
+                level_sum_score = PASS_SCORE;
+                totalTime = 0;
+                speed = INIT_SPEED;
+                continue;  // 如果生存者輸入's' 繼續遊戲
+            }
+            continue;
         } else {
             totalTime = 0;
             speed = INIT_SPEED / (1 + 0.25 * (level - 1));
@@ -541,8 +584,10 @@ char playGame(int field[][GRID_SIDE], EntityPointer zombie, EntityPointer player
         }
 
         if (IsGameOver(zombie, player, field))  // 判斷是否符合遊戲結束條件，
-            return char(showGameOverMsg());  // 顯示遊戲結束訊息，並等待生存者輸入選項
-
+        {
+            updateLeaderboard(leaderboard, scoreSum);// 更新排行榜
+            return showGameOverMsg();  // 顯示遊戲結束訊息，並等待生存者輸入選項
+        }
         // 除了收集到資源會產生新資源，系統也隨機產生新資源
         if (dist(generator) % 20 == 0)
             createResource(field, zombie);
@@ -695,6 +740,7 @@ bool IsAtZombie(EntityPointer zombie, int row, int col) {
     return false;
 }
 
+
 // 遊戲結束訊息
 char showGameOverMsg() {
     // cleardevice(); //清理所有螢幕資料，如果希望只顯示訊息時，取消註解
@@ -704,7 +750,8 @@ char showGameOverMsg() {
     }
     int i = 0;
 
-    char msg2[40] = "press [q] to quit or [s] to restart!!";
+    char msg2[40] = "press [q] to quit or [s] to restart";
+    char msg3[40] = "or [r] for leaderboard!!";
     for (;; i++) {
         setcolor(i % 14);
         settextstyle(TRIPLEX_FONT, HORIZ_DIR, 7);
@@ -713,6 +760,7 @@ char showGameOverMsg() {
         setcolor(WHITE);
         settextstyle(TRIPLEX_FONT, HORIZ_DIR, 2);
         outtextxy(60, SCREEN_HEIGHT / 2 + 70, msg2);
+        outtextxy(60, SCREEN_HEIGHT / 2 + 90, msg3);
 
         delay(200);
 
@@ -723,7 +771,7 @@ char showGameOverMsg() {
         if (kbhit()) {
             char key;
             key = char(getch());
-            if (key == 'q' || key == 'Q' || key == 's' || key == 'S') {
+            if (key == 'q' || key == 'Q' || key == 's' || key == 'S' || key == 'r' || key == 'R') {
                 return key;
             }
         }
@@ -747,6 +795,8 @@ char showGamePassMsg() {
         strcpy(msg1, "You Pass All Level!!");
     }
 
+    char msg3[40] = "or [r] for leaderboard!!";
+
     for (;; i++) {
         setcolor(i % 14);
         settextstyle(TRIPLEX_FONT, HORIZ_DIR, 5);
@@ -755,6 +805,10 @@ char showGamePassMsg() {
         setcolor(WHITE);
         settextstyle(TRIPLEX_FONT, HORIZ_DIR, 1);
         outtextxy(60, SCREEN_HEIGHT / 2 + 70, msg2);
+
+        if (level > MAX_LEVEL) {
+            outtextxy(60, SCREEN_HEIGHT / 2 + 90, msg3);
+        }
 
         delay(200);
 
@@ -765,16 +819,16 @@ char showGamePassMsg() {
         if (kbhit()) {
             char key;
             key = char(getch());
-            if (level <= MAX_LEVEL) {
-                if (key == 'q' || key == 'Q' || key == 's' || key == 'S' || key == 'c' || key == 'C') {
-                    return key;
-                }
-            } else {
-                if (key == 'q' || key == 'Q' || key == 's' || key == 'S') {
-                    return key;
-                }
+            if (key == 'q' || key == 'Q' || key == 's' || key == 'S') {
+                return key;
             }
 
+            if (level <= MAX_LEVEL && (key == 'c' || key == 'C')) {
+                return key;
+            } else if (level > MAX_LEVEL && (key == 'r' || key == 'R')) {
+                updateLeaderboard(leaderboard, scoreSum);// 更新排行榜
+                return key;
+            }
         }
     }
 }
@@ -1458,3 +1512,88 @@ int pathCost(PathPointer path) {
 int calculateDistance(int row, int col, int row1, int col1) {
     return abs(row1 - row) + abs(col1 - col);
 }
+
+//顯示排行榜
+char displayLeaderboard(const std::vector<int> &scores) {
+    char msg1[15] = "Leaderboard";
+    char msg2[140];
+    char msg3[40] = "press [q] to quit or [s] to restart !!";
+    int y = SCREEN_HEIGHT / 2 - (scores.size() * 30) / 2; // 設定 Y 座標位置正中間
+
+    while (true) {
+        // 清理畫面
+        cleardevice();
+
+        setcolor(WHITE);
+        settextstyle(TRIPLEX_FONT, HORIZ_DIR, 2);
+
+        // 顯示 msg1
+        outtextxy((SCREEN_WIDTH - textwidth(msg1)) / 2, y - 30, msg1);
+
+        // 逐行輸出名次和分數
+        for (int i = 0; i < scores.size(); i++) {
+            char temp[50];
+            sprintf(temp, "%2d. %4d points", i + 1, scores[i]);
+            outtextxy((SCREEN_WIDTH - textwidth(temp)) / 2, y + i * 30, temp); // 水平置中輸出文字
+
+        }
+
+        strcpy(msg2, msg3); // 將 msg3 複製到 msg2
+
+        settextstyle(TRIPLEX_FONT, HORIZ_DIR, 2);
+        outtextxy(60, y + 400, msg2);
+        delay(200);
+
+        if (kbhit()) {
+            char key;
+            key = char(getch());
+            if (key == 'q' || key == 'Q' || key == 's' || key == 'S') {
+                return key;
+            }
+        }
+    }
+}
+
+//更新排行榜
+void updateLeaderboard(std::vector<int> &scores, int newScore) {
+    scores.push_back(newScore);
+    std::sort(scores.begin(), scores.end(), std::greater<>());
+
+    if (scores.size() > MAX_SCORES) {
+        scores.pop_back(); // 如果超過最大排行榜數，移除最低分數一個
+    }
+
+    std::ofstream file("../resource/leaderboard.txt"); // 打開分數紀錄檔
+
+    if (file.is_open()) {
+        for (const int score : scores) {
+            file << score << "\n"; // 將分數逐行儲存
+        }
+
+        file.close(); // 關閉文件
+    } else {
+        // 處理開啟失敗情況
+        printf("Can't not open file\n");
+    }
+}
+
+void loadLeaderboard(std::vector<int> &scores) {
+    std::ifstream file("../resource/leaderboard.txt");
+
+    if (file.is_open()) {
+        int score;
+        int index = 0;
+
+        while (file >> score && index < MAX_SCORES) {
+            scores[index] = score;
+            ++index;
+        }
+
+        file.close();
+    } else {
+        // 處理開啟失敗情況
+        printf("Can't not open file\n");
+    }
+}
+
+
