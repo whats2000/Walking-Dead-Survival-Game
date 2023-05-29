@@ -345,7 +345,7 @@ int main() {
                     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
 
     while (key != 'q' && key != 'Q') {
-        Entity headPlayer = {1, 1, RIGHT, nullptr};  // 設定勇者初始位置和方向
+        Entity headPlayer = {1, 2, RIGHT, nullptr};  // 設定勇者初始位置和方向
         Entity headZombie = {16, 16, RIGHT, nullptr};  // 設定喪屍屍頭初始位置和方向
         EntityPointer zombie = &headZombie;
         EntityPointer player = &headPlayer;
